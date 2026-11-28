@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VectorLine Analytics (Beta) — Pure Model, Trending &amp; Cross-Tabs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Public+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="analytics.css" />
+</head>
+<body>
+  <!-- CRYPTOGRAPHIC LOCK SCREEN (Shown only when NHL_EDGE_ENCRYPTED_SNAPSHOT is present) -->
+  <section id="vault-lock-screen" class="vault-lock-screen" hidden aria-labelledby="vault-heading">
+    <form id="vault-unlock-form" class="vault-card">
+      <div class="brand-cluster">
+        <div class="brand-monogram">VL</div>
+        <div>
+          <h1 id="vault-heading" class="vault-title">🔒 Protected Analytics Vault <span class="beta-pill">BETA</span></h1>
+          <p id="vault-updated-meta" class="desk-subtitle">AES-256-GCM Encrypted Snapshot</p>
+        </div>
+      </div>
+
+      <p class="vault-desc">
+        Encrypted at rest with <strong>AES-256-GCM</strong> (`PBKDF2-SHA256`, 600,000 iterations). Enter your passphrase to unlock locally in your browser.
+      </p>
+
+      <div>
+        <label for="vault-passphrase-input" class="field-mini-label">Passphrase</label>
+        <input
+          type="password"
+          id="vault-passphrase-input"
+          class="vault-input"
+          autocomplete="current-password"
+          placeholder="Enter dashboard passphrase…"
+          required
+        />
+      </div>
+
+      <label class="vault-remember-row" for="vault-remember-device">
+        <input type="checkbox" id="vault-remember-device" checked />
+        <span>Remember unlocked key on this device</span>
+      </label>
+
+      <div id="vault-error-msg" class="vault-error" role="alert" hidden></div>
+
+      <button type="submit" id="btn-vault-unlock" class="btn-desk btn-desk-primary vault-submit-btn">
+        🔓 Unlock Analytics Dashboard
+      </button>
+    </form>
+  </section>
+
+  <div id="analytics-main-shell" class="analytics-shell">
+    <!-- MINIMAL HEADER -->
+    <header class="desk-header">
+      <div class="brand-cluster">
+        <div class="brand-monogram">VL</div>
+        <div>
+          <div class="title-row">
+            <h1 class="desk-title">VectorLine Analytics</h1>
+            <span class="beta-pill">BETA</span>
+          </div>
+          <p class="desk-subtitle">Pure Model Selections • Rolling Form &amp; What’s Firing • Granular Cross-Tabs</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <span id="data-source-pill" class="source-pill">Loading…</span>
+        <button type="button" id="btn-lock-vault" class="btn-desk" hidden title="Lock vault on this browser">🔒 Lock</button>
+        <button type="button" id="btn-unit-mode-toggle" class="btn-desk" aria-pressed="false" title="Toggle between Dollars ($) and Units (u)">💲 Units / $</button>
+        <button type="button" id="btn-refresh-data" class="btn-desk">↻ Refresh</button>
+        <label class="btn-desk file-upload-label" for="input-import-file" title="Import CSV or JSON">📂 Import</label>
+        <input type="file" id="input-import-file" accept=".csv,.json" hidden />
+        <button type="button" id="btn-export-analytics-json" class="btn-desk">⬇ Export</button>
+      </div>
+    </header>
+
+    <!-- PRIMARY WORKSPACE TABS (ZERO CLUTTER — ONE FOCUSED VIEW AT A TIME) -->
+    <nav class="workspace-tabs" role="tablist" aria-label="Analytics Views">
+      <div class="workspace-tabs-main">
+        <button type="button" class="ws-tab" role="tab" data-tab="model" aria-selected="true">🤖 Pure Model</button>
+        <button type="button" class="ws-tab" role="tab" data-tab="firing" aria-selected="false">🔥 What’s Firing</button>
+        <button type="button" class="ws-tab" role="tab" data-tab="crosstab" aria-selected="false">🔀 Cross-Tab Explorer</button>
+        <button type="button" class="ws-tab" role="tab" data-tab="cash" aria-selected="false">💵 Cash Wagers</button>
+      </div>
+      <button type="button" class="ws-tab ws-tab-muted" role="tab" data-tab="paper" aria-selected="false" title="Future betting-system sandbox (de-emphasized)">🧪 Paper Lab (Soon)</button>
+    </nav>
+
+    <!-- =======================================================================
+         VIEW 1: PURE MODEL (ALL SCANNED SELECTIONS + ROLLING FORM)
+         ======================================================================= -->
+    <section id="view-model" class="ws-view" role="tabpanel">
+      <div class="subbar-card">
+        <div class="subbar-left">
+          <span class="field-mini-label">Model Selection Universe</span>
+          <div class="pill-toggle-group" id="model-scope-pills" role="group" aria-label="Model selection scope">
+            <button type="button" class="scope-pill" data-model-scope="MODEL_EV" aria-pressed="true" title="Every scanned prop where the model sees positive EV over the posted book odds (never both sides of a prop)">
+              All +EV Scanned Selections
+            </button>
+            <button type="button" class="scope-pill" data-model-scope="MODEL_LEAN" aria-pressed="false" title="1 pure model directional pick on 100% of scanned props (favored side vs zero-vig sportsbook)">
+              All Scanned Props (1 Pick / Prop)
+            </button>
+            <button type="button" class="scope-pill" data-model-scope="MODEL_CARD" aria-pressed="false" title="Concentrated Simultaneous Kelly game-card plays (max 6 per game)">
+              Card Top-6 Recs
+            </button>
+          </div>
+          <p id="model-scope-caption" class="panel-note"></p>
+        </div>
+
+        <div class="filter-group-row">
+          <div class="filter-field">
+            <label for="model-filter-market">Market</label>
+            <select id="model-filter-market" class="desk-select">
+              <option value="ALL">All Markets</option>
+              <option value="SOG">SOG</option>
+              <option value="Points">Points</option>
+              <option value="Assists">Assists</option>
+              <option value="Goals">Goals</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="model-filter-side">Selection</label>
+            <select id="model-filter-side" class="desk-select">
+              <option value="ALL">Overs + Unders</option>
+              <option value="Over">Overs Only</option>
+              <option value="Under">Unders Only</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="model-filter-line">Posted Total</label>
+            <select id="model-filter-line" class="desk-select">
+              <option value="ALL">All Totals</option>
+              <option value="0.5">0.5</option>
+              <option value="1.5">1.5</option>
+              <option value="2.5">2.5</option>
+              <option value="3.5">3.5</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROLLING MOMENTUM STRIP (L3 / L5 / L7 SLATES VS OVERALL) -->
+      <div class="desk-panel compact-panel">
+        <div class="panel-header tight-header">
+          <div class="title-row">
+            <h2 class="panel-title">📈 Recent Momentum vs. Overall</h2>
+            <span id="model-streak-badge" class="streak-badge"></span>
+          </div>
+          <span class="panel-note">Tracks recent slates so hot/cold turns aren’t buried inside season totals.</span>
+        </div>
+        <div id="model-trends-strip" class="trends-strip"></div>
+      </div>
+
+      <!-- CORE MODEL KPIs (4 CLEAN CARDS INCLUDING EXPLICIT OVER VS UNDER SPLIT) -->
+      <div id="model-kpi-grid" class="kpi-grid"></div>
+
+      <!-- VISUAL CHARTS: DAILY SLATE BARS + CUMULATIVE TRAJECTORY -->
+      <div class="charts-two-col">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <h2 class="panel-title">📊 Slate-by-Slate Net Units (1u Flat)</h2>
+              <p class="panel-note">Green bars = winning slates; hover any bar for date record &amp; ROI.</p>
+            </div>
+          </div>
+          <div id="chart-model-daily" class="svg-chart-mount"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <h2 class="panel-title">📈 Cumulative Model Trajectory</h2>
+              <p class="panel-note">Cumulative 1u Equal-Stake return across chronologically graded slates.</p>
+            </div>
+          </div>
+          <div id="chart-model-equity" class="svg-chart-mount"></div>
+        </div>
+      </div>
+
+      <!-- TOP 4 FIRING SIGNALS PREVIEW -->
+      <div class="desk-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🔥 Firing Right Now in Selected Model View</h2>
+            <p class="panel-note">Live pockets beating market expectations across teams, players, totals, and Edge × Moneyline.</p>
+          </div>
+          <button type="button" id="btn-jump-to-firing" class="btn-desk btn-desk-primary">Open Full Trending Feed →</button>
+        </div>
+        <div id="model-firing-preview" class="signal-cards-grid"></div>
+      </div>
+
+      <!-- SINGLE CLEAN MODEL BREAKDOWN TABLE -->
+      <div class="desk-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">📐 Pure Model Breakdown</h2>
+            <p class="panel-note">Inspect Overs &amp; Unders, Posted Totals (0.5 / 1.5 / 2.5 / 3.5), Edge %, Moneyline, or Team.</p>
+          </div>
+          <div class="filter-field">
+            <label for="model-breakdown-dim">Group By</label>
+            <select id="model-breakdown-dim" class="desk-select">
+              <option value="edge_bucket" selected>Value Edge %</option>
+              <option value="market_line_selection">Market • Side • Total (e.g. SOG Over 2.5)</option>
+              <option value="selection_line">Side &amp; Posted Total (Over 2.5 vs Under 2.5)</option>
+              <option value="market_selection">Market • Selection (Over vs Under)</option>
+              <option value="odds_bucket">Attached Moneyline</option>
+              <option value="team">Player Team</option>
+            </select>
+          </div>
+        </div>
+        <div id="model-breakdown-mount" class="table-scroll-wrap"></div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         VIEW 2: WHAT'S FIRING (TRENDING NEWSFEED ACROSS MARKETS, TEAMS, PLAYERS)
+         ======================================================================= -->
+    <section id="view-firing" class="ws-view" role="tabpanel" hidden>
+      <div class="subbar-card">
+        <div class="subbar-left">
+          <span class="field-mini-label">Signal Feed Source</span>
+          <div class="pill-toggle-group" id="firing-source-pills" role="group" aria-label="Trending feed source">
+            <button type="button" class="scope-pill" data-firing-source="MODEL_EV" aria-pressed="true">🤖 Model (+EV Scanned)</button>
+            <button type="button" class="scope-pill" data-firing-source="MODEL_CARD" aria-pressed="false">🎯 Model (Card Recs)</button>
+            <button type="button" class="scope-pill" data-firing-source="CASH" aria-pressed="false">💵 Cash Wagers</button>
+            <button type="button" class="scope-pill" data-firing-source="CASH_AND_MODEL" aria-pressed="false">🤝 Cash ∩ Model</button>
+          </div>
+        </div>
+        <span class="panel-note">Click <strong>Inspect in Cross-Tab →</strong> on any card to drill into that exact slice.</span>
+      </div>
+
+      <div class="desk-panel compact-panel">
+        <div class="panel-header tight-header">
+          <div class="title-row">
+            <h2 class="panel-title">⚡ Rolling Slate Pulse</h2>
+            <span id="firing-streak-badge" class="streak-badge"></span>
+          </div>
+        </div>
+        <div id="firing-trends-strip" class="trends-strip"></div>
+      </div>
+
+      <div class="desk-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">📰 Top Signals Firing Above Market Expectations</h2>
+            <p class="panel-note">Highest-conviction pockets ranked by ROI %, margin over implied breakeven %, and last-5 form.</p>
+          </div>
+        </div>
+        <div id="firing-headlines-grid" class="signal-cards-grid"></div>
+      </div>
+
+      <div class="firing-two-col">
+        <div class="desk-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">🏒 Teams Beating Market Expectations</h2>
+              <p class="panel-note">Skater groups where wagers on that team’s players keep cashing above implied odds.</p>
+            </div>
+          </div>
+          <div id="firing-teams-grid" class="signal-cards-stack"></div>
+        </div>
+
+        <div class="desk-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">⭐ Individual Players on Heaters</h2>
+              <p class="panel-note">Individual skaters repeatedly hitting model / wager selections.</p>
+            </div>
+          </div>
+          <div id="firing-players-grid" class="signal-cards-stack"></div>
+        </div>
+      </div>
+
+      <div class="firing-two-col">
+        <div class="desk-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">🎯 Firing Market Totals &amp; Edge × Odds Pockets</h2>
+              <p class="panel-note">Posted totals (0.5 / 1.5 / 2.5 / 3.5), Over/Under splits, and moneyline bands outperforming.</p>
+            </div>
+          </div>
+          <div id="firing-markets-grid" class="signal-cards-stack"></div>
+        </div>
+
+        <div class="desk-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">🧊 Cold / Trap Watch (Underperforming)</h2>
+              <p class="panel-note">Pockets trailing market breakeven (e.g. over-confident 12%+ edges or heavy chalk).</p>
+            </div>
+          </div>
+          <div id="firing-cold-grid" class="signal-cards-stack"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         VIEW 3: GRANULAR 2D CROSS-TAB EXPLORER (CASH | MODEL | COMBINATIONS)
+         ======================================================================= -->
+    <section id="view-crosstab" class="ws-view" role="tabpanel" hidden>
+      <div class="crosstab-filter-deck">
+        <!-- ROW 1: SOURCE / COMBINATION SELECTOR -->
+        <div class="ct-deck-row">
+          <div>
+            <span class="field-mini-label">1. Source / Combination</span>
+            <div class="pill-toggle-group" id="ct-source-pills" role="group" aria-label="Cross-tab data source">
+              <button type="button" class="scope-pill" data-ct-source="MODEL_EV" aria-pressed="true" title="All scanned selections where Model Edge > 0%">🤖 Model (+EV)</button>
+              <button type="button" class="scope-pill" data-ct-source="MODEL_CARD" aria-pressed="false" title="Top-6 Simultaneous Kelly card recommendations">🎯 Model (Card)</button>
+              <button type="button" class="scope-pill" data-ct-source="CASH" aria-pressed="false" title="Real Cash wagers">💵 Cash</button>
+              <button type="button" class="scope-pill" data-ct-source="CASH_AND_MODEL" aria-pressed="false" title="Cash wagers backed by a +EV Model edge">🤝 Cash ∩ Model</button>
+              <button type="button" class="scope-pill" data-ct-source="MODEL_UNBET" aria-pressed="false" title="+EV Model selections you did not bet with Cash">👀 Model Unbet</button>
+              <button type="button" class="scope-pill" data-ct-source="CASH_OFF_MODEL" aria-pressed="false" title="Cash wagers placed without a +EV Model signal">⚡ Off-Model Cash</button>
+              <button type="button" class="scope-pill" data-ct-source="COMPARE_CASH_MODEL" aria-pressed="false" title="Compare Cash vs Model side-by-side">⚖️ Cash vs Model</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 2: GRANULAR SLICE FILTERS (OVER/UNDER, POSTED TOTAL 0.5/1.5/2.5/3.5, MARKET, EDGE, ODDS, TEAM, RECENT) -->
+        <div class="ct-deck-row ct-granular-row">
+          <div>
+            <span class="field-mini-label">2. Side (Over / Under)</span>
+            <div class="pill-toggle-group" id="ct-side-pills" role="group" aria-label="Filter Over vs Under">
+              <button type="button" class="mini-pill" data-ct-side="ALL" aria-pressed="true">All (O + U)</button>
+              <button type="button" class="mini-pill" data-ct-side="Over" aria-pressed="false">Overs</button>
+              <button type="button" class="mini-pill" data-ct-side="Under" aria-pressed="false">Unders</button>
+            </div>
+          </div>
+
+          <div>
+            <span class="field-mini-label">3. Posted Total (Line)</span>
+            <div class="pill-toggle-group" id="ct-line-pills" role="group" aria-label="Filter by Posted Total">
+              <button type="button" class="mini-pill" data-ct-line="ALL" aria-pressed="true">All</button>
+              <button type="button" class="mini-pill" data-ct-line="0.5" aria-pressed="false">0.5</button>
+              <button type="button" class="mini-pill" data-ct-line="1.5" aria-pressed="false">1.5</button>
+              <button type="button" class="mini-pill" data-ct-line="2.5" aria-pressed="false">2.5</button>
+              <button type="button" class="mini-pill" data-ct-line="3.5" aria-pressed="false">3.5</button>
+            </div>
+          </div>
+
+          <div class="filter-field">
+            <label for="ct-filter-market">Market</label>
+            <select id="ct-filter-market" class="desk-select">
+              <option value="ALL">All Markets</option>
+              <option value="SOG">SOG</option>
+              <option value="Points">Points</option>
+              <option value="Assists">Assists</option>
+              <option value="Goals">Goals</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="ct-filter-edge">Edge % Filter</label>
+            <select id="ct-filter-edge" class="desk-select">
+              <option value="ALL">All Edge Bands</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="ct-filter-odds">Moneyline Filter</label>
+            <select id="ct-filter-odds" class="desk-select">
+              <option value="ALL">All Moneylines</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="ct-filter-team">Team</label>
+            <select id="ct-filter-team" class="desk-select">
+              <option value="ALL">All Teams</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="ct-filter-window">Window</label>
+            <select id="ct-filter-window" class="desk-select">
+              <option value="0" selected>All Slates</option>
+              <option value="3">Last 3 Slates</option>
+              <option value="5">Last 5 Slates</option>
+              <option value="7">Last 7 Slates</option>
+            </select>
+          </div>
+
+          <button type="button" id="btn-ct-reset" class="btn-desk">↺ Reset Filters</button>
+        </div>
+
+        <!-- ROW 3: MATRIX AXES & CELL MODE -->
+        <div class="ct-deck-row ct-axes-row">
+          <div class="filter-group-row">
+            <div class="filter-field">
+              <label for="ct-row-dim">Row Axis</label>
+              <select id="ct-row-dim" class="desk-select">
+                <option value="edge_bucket" selected>Value Edge %</option>
+                <option value="odds_bucket">Attached Moneyline</option>
+                <option value="selection">Selection (Over / Under)</option>
+                <option value="line">Posted Total (0.5 / 1.5 / 2.5 / 3.5)</option>
+                <option value="selection_line">Side &amp; Total (Over 2.5 vs Under 2.5)</option>
+                <option value="market">Market</option>
+                <option value="market_selection">Market • Selection</option>
+                <option value="market_line_selection">Market • Side • Total</option>
+                <option value="team">Player Team</option>
+                <option value="rel_size_bucket">Relative Wager Size</option>
+                <option value="wager_action">Execution (Cash Backed vs Unbet)</option>
+                <option value="bet_type">Source (Cash vs Model)</option>
+                <option value="sportsbook">Sportsbook</option>
+              </select>
+            </div>
+
+            <button type="button" id="btn-swap-dims" class="btn-desk" title="Swap Row and Column">⇄ Swap</button>
+
+            <div class="filter-field">
+              <label for="ct-col-dim">Column Axis</label>
+              <select id="ct-col-dim" class="desk-select">
+                <option value="odds_bucket" selected>Attached Moneyline</option>
+                <option value="selection">Selection (Over / Under)</option>
+                <option value="line">Posted Total (0.5 / 1.5 / 2.5 / 3.5)</option>
+                <option value="selection_line">Side &amp; Total (Over 2.5 vs Under 2.5)</option>
+                <option value="edge_bucket">Value Edge %</option>
+                <option value="market">Market</option>
+                <option value="market_selection">Market • Selection</option>
+                <option value="team">Player Team</option>
+                <option value="rel_size_bucket">Relative Wager Size</option>
+                <option value="wager_action">Execution (Cash Backed vs Unbet)</option>
+                <option value="bet_type">Source (Cash vs Model)</option>
+                <option value="sportsbook">Sportsbook</option>
+              </select>
+            </div>
+
+            <div class="filter-field">
+              <label for="ct-cell-mode">Cell Display</label>
+              <select id="ct-cell-mode" class="desk-select">
+                <option value="roi_vs_flat" selected>ROI % + Record + 1u</option>
+                <option value="full">Full Cashflow + Size</option>
+                <option value="calibration">Hit % vs Breakeven / Model %</option>
+                <option value="rel_size">Relative Wager Size (× Avg)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="preset-crosstab-pills" class="preset-pills"></div>
+        </div>
+      </div>
+
+      <!-- LIVE ACTIVE SLICE SUMMARY STRIP -->
+      <div id="ct-slice-summary" class="slice-summary-bar" aria-live="polite"></div>
+
+      <!-- 2D MATRIX TABLE -->
+      <div class="desk-panel">
+        <div id="crosstab-mount" class="table-scroll-wrap"></div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         VIEW 4: CASH WAGERS LEDGER (CLEAN REAL-MONEY VIEW + SIZING SWINGS)
+         ======================================================================= -->
+    <section id="view-cash" class="ws-view" role="tabpanel" hidden>
+      <div class="subbar-card">
+        <div class="subbar-left">
+          <span class="field-mini-label">Real-Money Cash Portfolio</span>
+          <p class="panel-note">Isolates Dollar ROI (Wagered / Won / Lost) from Equal-Stake (1u) ROI and outsized bet swings.</p>
+        </div>
+        <div class="filter-group-row">
+          <div class="filter-field">
+            <label for="cash-filter-book">Sportsbook</label>
+            <select id="cash-filter-book" class="desk-select">
+              <option value="ALL">All Books</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="cash-filter-market">Market</label>
+            <select id="cash-filter-market" class="desk-select">
+              <option value="ALL">All Markets</option>
+              <option value="SOG">SOG</option>
+              <option value="Points">Points</option>
+              <option value="Assists">Assists</option>
+              <option value="Goals">Goals</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="cash-filter-side">Selection</label>
+            <select id="cash-filter-side" class="desk-select">
+              <option value="ALL">Overs + Unders</option>
+              <option value="Over">Overs Only</option>
+              <option value="Under">Unders Only</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="desk-panel compact-panel">
+        <div class="panel-header tight-header">
+          <div class="title-row">
+            <h2 class="panel-title">📈 Cash Rolling Momentum</h2>
+            <span id="cash-streak-badge" class="streak-badge"></span>
+          </div>
+        </div>
+        <div id="cash-trends-strip" class="trends-strip"></div>
+      </div>
+
+      <div id="cash-kpi-grid" class="kpi-grid"></div>
+
+      <div class="charts-two-col">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <h2 class="panel-title">📈 Cash Cumulative Trajectory: Sized vs. 1u Equal-Stake</h2>
+              <p class="panel-note">Solid green = Actual Dollar Sized (in avg-bet units); dashed blue = 1u Equal-Stake.</p>
+            </div>
+          </div>
+          <div id="chart-cash-equity" class="svg-chart-mount"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <h2 class="panel-title">🎯 Stake Multiple (× Avg) vs. Bet P&amp;L Swing</h2>
+              <p class="panel-note">Shows whether outsized wagers (&ge; 1.50x avg) lifted or dragged overall Dollar ROI.</p>
+            </div>
+          </div>
+          <div id="chart-cash-scatter" class="svg-chart-mount"></div>
+        </div>
+      </div>
+
+      <div class="desk-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">⚖️ Bet-Sizing &amp; Stake-Cap Counterfactuals</h2>
+            <p class="panel-note">Compares actual Cash sizing against 1u Flat and stake caps (1.25x / 1.50x avg).</p>
+          </div>
+        </div>
+        <div id="cash-counterfactuals-grid" class="cf-grid"></div>
+      </div>
+
+      <div class="desk-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">🎯 Largest Individual Cash Swings</h2>
+          </div>
+        </div>
+        <div id="cash-swings-mount" class="table-scroll-wrap"></div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         VIEW 5: DE-EMPHASIZED PAPER / SYSTEM TESTING LAB (BETA PLACEHOLDER)
+         ======================================================================= -->
+    <section id="view-paper" class="ws-view" role="tabpanel" hidden>
+      <div class="desk-panel sandbox-notice-panel">
+        <div class="title-row" style="margin-block-end:0.4rem;">
+          <h2 class="panel-title">🧪 Betting System Sandbox &amp; Paper Ledger</h2>
+          <span class="beta-pill">WORK IN PROGRESS</span>
+        </div>
+        <p class="panel-note" style="font-size:0.82rem;max-inline-size:780px;">
+          Paper wagers are intentionally pulled out of core Pure Model &amp; Cash dashboards so they don’t add noise.
+          All logged Paper selections remain safely stored in SQLite for future rule-based system testing (custom edge thresholds, odds caps, and sizing rules).
+        </p>
+        <div id="paper-sandbox-summary" style="margin-block-start:0.85rem;"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- CELL DRILLDOWN DIALOG -->
+  <dialog id="cell-drilldown-dialog" class="drilldown-dialog">
+    <div class="dialog-inner">
+      <div class="dialog-header">
+        <div>
+          <h3 id="drilldown-title" class="panel-title">Bucket Drilldown</h3>
+          <p id="drilldown-subtitle" class="panel-note"></p>
+        </div>
+        <button type="button" id="btn-close-drilldown" class="btn-desk">✕ Close</button>
+      </div>
+      <div id="drilldown-body" class="dialog-body"></div>
+    </div>
+  </dialog>
+
+  <script src="wager_ledger_snapshot.js"></script>
+  <script src="wager-analytics.js"></script>
+  <script src="analytics-page.js"></script>
+</body>
+</html>
